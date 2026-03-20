@@ -1,3 +1,3 @@
 // Supabase configuration
-window.__SUPABASE_URL__ = '%%SUPABASE_URL%%';
-window.__SUPABASE_KEY__ = '%%SUPABASE_ANON_KEY%%';
+window.__SUPABASE_URL__ = 'https://juvourglpeusizvprfmi.supabase.co';
+window.__SUPABASE_KEY__ = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1dm91cmdscGV1c2l6dnByZm1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTcwMjMsImV4cCI6MjA4OTUzMzAyM30.BvVGcso-ez-slfIMIf-X5_diIddP9PlLeXArEnnC8uY';
