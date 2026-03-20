@@ -261,7 +261,7 @@
     // ========================
     // SUPABASE CLIENT
     // ========================
-    let supabase = null;
+    let sbClient = null;
     let allCases = [];
     let allProperties = {};
     let allLoans = {};
@@ -270,12 +270,12 @@
     function initSupabase() {
         const cfg = getConfig();
         if (!cfg) return false;
-        supabase = window.supabase.createClient(cfg.url, cfg.key);
+        sbClient = window.supabase.createClient(cfg.url, cfg.key);
         return true;
     }
 
     async function loadData() {
-        if (!supabase) {
+        if (!sbClient) {
             if (!initSupabase()) {
                 showConfig();
                 return;
@@ -289,10 +289,10 @@
 
         try {
             const [casesRes, propsRes, loansRes, partiesRes] = await Promise.all([
-                supabase.from('cases').select('*').order('seq_num'),
-                supabase.from('properties').select('*'),
-                supabase.from('loans').select('*'),
-                supabase.from('parties').select('*'),
+                sbClient.from('cases').select('*').order('seq_num'),
+                sbClient.from('properties').select('*'),
+                sbClient.from('loans').select('*'),
+                sbClient.from('parties').select('*'),
             ]);
 
             if (casesRes.error) throw casesRes.error;
