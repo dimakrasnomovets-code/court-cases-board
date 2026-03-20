@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Foreclosure Cases Dashboard</title>
+    <script src="./config.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(148, 163, 184, 0.1); }
+        .glass-light { background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(148, 163, 184, 0.08); }
+        .glow { box-shadow: 0 0 40px rgba(59, 130, 246, 0.1); }
+        .row-hover:hover { background: rgba(59, 130, 246, 0.05) !important; }
+        .status-active { color: #34d399; background: rgba(52, 211, 153, 0.1); }
+        .status-closed { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+        .status-open { color: #60a5fa; background: rgba(96, 165, 250, 0.1); }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2); border-radius: 3px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.4); }
+        .modal-backdrop { background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        .tooltip { position: relative; }
+        .tooltip:hover::after { content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); padding: 4px 8px; background: #1e293b; color: #e2e8f0; font-size: 12px; border-radius: 4px; white-space: nowrap; z-index: 50; }
+    </style>
+</head>
+<body class="bg-dark-950 text-dark-200 min-h-screen">
+
+    <!-- Background gradient -->
+    <div class="fixed inset-0 bg-gradient-to-br from-blue-950/20 via-dark-950 to-indigo-950/20 pointer-events-none"></div>
+
+    <div class="relative z-10 min-h-screen">
+        <!-- Header -->
+        <header class="glass sticky top-0 z-40 px-6 py-4">
+            <div class="max-w-[1600px] mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-semibold text-white">Foreclosure Cases</h1>
+                        <p class="text-xs text-dark-400">Brevard County, FL — 2026</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div id="stats-bar" class="flex items-center gap-6 text-sm"></div>
+                    <button onclick="loadData()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Filters -->
+        <div class="max-w-[1600px] mx-auto px-6 py-4">
+            <div class="glass rounded-2xl p-4 glow">
+                <div class="flex flex-wrap items-center gap-4">
+                    <!-- Search -->
+                    <div class="flex-1 min-w-[250px] relative">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input id="search" type="text" placeholder="Search by case #, parties, address..." class="w-full pl-10 pr-4 py-2.5 bg-dark-800/50 border border-dark-700/50 rounded-xl text-sm text-white placeholder-dark-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all" oninput="applyFilters()">
+                    </div>
+
+                    <!-- Status filter -->
+                    <select id="filter-status" class="px-4 py-2.5 bg-dark-800/50 border border-dark-700/50 rounded-xl text-sm text-dark-200 focus:outline-none focus:border-blue-500/50 transition-all cursor-pointer" onchange="applyFilters()">
+                        <option value="">All Statuses</option>
+                        <option value="active">Active</option>
+                        <option value="CASE OPEN">Case Open</option>
+                        <option value="closed">Closed</option>
+                    </select>
+
+                    <!-- Foreclosure filter -->
+                    <select id="filter-foreclosure" class="px-4 py-2.5 bg-dark-800/50 border border-dark-700/50 rounded-xl text-sm text-dark-200 focus:outline-none focus:border-blue-500/50 transition-all cursor-pointer" onchange="applyFilters()">
+                        <option value="">All Types</option>
+                        <option value="1">Foreclosure</option>
+                        <option value="0">Non-foreclosure</option>
+                    </select>
+
+                    <!-- Has loan data filter -->
+                    <select id="filter-loan" class="px-4 py-2.5 bg-dark-800/50 border border-dark-700/50 rounded-xl text-sm text-dark-200 focus:outline-none focus:border-blue-500/50 transition-all cursor-pointer" onchange="applyFilters()">
+                        <option value="">Loan Data</option>
+                        <option value="has">Has Loan Info</option>
+                        <option value="no">No Loan Info</option>
+                    </select>
+
+                    <!-- Sort -->
+                    <select id="sort-by" class="px-4 py-2.5 bg-dark-800/50 border border-dark-700/50 rounded-xl text-sm text-dark-200 focus:outline-none focus:border-blue-500/50 transition-all cursor-pointer" onchange="applyFilters()">
+                        <option value="seq_num">Sort: Case #</option>
+                        <option value="filed_date">Sort: Filed Date</option>
+                        <option value="principal_balance">Sort: Balance (High→Low)</option>
+                        <option value="estimated_arrears">Sort: Arrears (High→Low)</option>
+                    </select>
+
+                    <!-- Clear filters -->
+                    <button onclick="clearFilters()" class="px-3 py-2.5 text-dark-400 hover:text-white text-sm transition-colors">
+                        Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="max-w-[1600px] mx-auto px-6 pb-8">
+            <div class="glass rounded-2xl overflow-hidden glow">
+                <!-- Loading state -->
+                <div id="loading" class="p-12 text-center">
+                    <div class="inline-block w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                    <p class="mt-4 text-dark-400 text-sm">Loading cases...</p>
+                </div>
+
+                <!-- Error state -->
+                <div id="error" class="p-12 text-center hidden">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                    </div>
+                    <p class="text-red-300 font-medium">Connection Error</p>
+                    <p id="error-msg" class="mt-2 text-dark-400 text-sm"></p>
+                    <button onclick="showConfig()" class="mt-4 px-4 py-2 rounded-lg bg-dark-700 hover:bg-dark-600 text-sm transition-colors">Configure Supabase</button>
+                </div>
+
+                <!-- Empty state -->
+                <div id="empty" class="p-12 text-center hidden">
+                    <p class="text-dark-400">No cases match your filters</p>
+                </div>
+
+                <!-- Table container -->
+                <div id="table-container" class="hidden overflow-x-auto scrollbar-thin">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-dark-700/50">
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-dark-400 uppercase tracking-wider">#</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-dark-400 uppercase tracking-wider">Case ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-dark-400 uppercase tracking-wider">Filed</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-dark-400 uppercase tracking-wider">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-dark-400 uppercase tracking-wider">Plaintiff</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-dark-400 uppercase tracking-wider">Defendant</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-dark-400 uppercase tracking-wider">Property</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-dark-400 uppercase tracking-wider">Balance</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-dark-400 uppercase tracking-wider">Arrears</th>
+                                <th class="px-4 py-3 text-center text-xs font-semibold text-dark-400 uppercase tracking-wider">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Case Detail Modal -->
+    <div id="modal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-backdrop absolute inset-0" onclick="closeModal()"></div>
+        <div class="relative z-10 max-w-3xl mx-auto mt-16 mb-8 max-h-[80vh] overflow-y-auto scrollbar-thin">
+            <div class="glass rounded-2xl p-6 fade-in" id="modal-content"></div>
+        </div>
+    </div>
+
+    <!-- Config Modal -->
+    <div id="config-modal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-backdrop absolute inset-0" onclick="closeConfig()"></div>
+        <div class="relative z-10 max-w-lg mx-auto mt-24">
+            <div class="glass rounded-2xl p-6 fade-in">
+                <h2 class="text-lg font-semibold text-white mb-4">Supabase Configuration</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-dark-300 mb-1">Project URL</label>
+                        <input id="cfg-url" type="text" placeholder="https://xxxxx.supabase.co" class="w-full px-4 py-2.5 bg-dark-800 border border-dark-700 rounded-xl text-sm text-white placeholder-dark-500 focus:outline-none focus:border-blue-500/50">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-dark-300 mb-1">Anon Key</label>
+                        <input id="cfg-key" type="password" placeholder="eyJhbGciOiJIUz..." class="w-full px-4 py-2.5 bg-dark-800 border border-dark-700 rounded-xl text-sm text-white placeholder-dark-500 focus:outline-none focus:border-blue-500/50">
+                    </div>
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="saveConfig()" class="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">Save & Connect</button>
+                        <button onclick="closeConfig()" class="px-4 py-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 text-sm transition-colors">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ========================
+    // CONFIG
+    // ========================
+    const CONFIG_KEY = 'supabase_config';
+
+    function getConfig() {
+        try {
+            const raw = sessionStorage.getItem(CONFIG_KEY);
+            if (raw) return JSON.parse(raw);
+        } catch(e) {}
+        // Check URL params
+        const params = new URLSearchParams(window.location.search);
+        const url = params.get('sb_url');
+        const key = params.get('sb_key');
+        if (url && key) return { url, key };
+        // Check env-injected config
+        if (window.__SUPABASE_URL__ && window.__SUPABASE_KEY__) {
+            return { url: window.__SUPABASE_URL__, key: window.__SUPABASE_KEY__ };
+        }
+        return null;
+    }
+
+    function showConfig() {
+        const cfg = getConfig();
+        if (cfg) {
+            document.getElementById('cfg-url').value = cfg.url;
+            document.getElementById('cfg-key').value = cfg.key;
+        }
+        document.getElementById('config-modal').classList.remove('hidden');
+    }
+
+    function closeConfig() {
+        document.getElementById('config-modal').classList.add('hidden');
+    }
+
+    function saveConfig() {
+        const url = document.getElementById('cfg-url').value.trim();
+        const key = document.getElementById('cfg-key').value.trim();
+        if (!url || !key) return alert('Please fill in both fields');
+        try {
+            sessionStorage.setItem(CONFIG_KEY, JSON.stringify({ url, key }));
+        } catch(e) {}
+        closeConfig();
+        initSupabase();
+        loadData();
+    }
+
+    // ========================
+    // SUPABASE CLIENT
+    // ========================
+    let supabase = null;
+    let allCases = [];
+    let allProperties = {};
+    let allLoans = {};
+    let allParties = {};
+
+    function initSupabase() {
+        const cfg = getConfig();
+        if (!cfg) return false;
+        supabase = window.supabase.createClient(cfg.url, cfg.key);
+        return true;
+    }
+
+    async function loadData() {
+        if (!supabase) {
+            if (!initSupabase()) {
+                showConfig();
+                return;
+            }
+        }
+
+        document.getElementById('loading').classList.remove('hidden');
+        document.getElementById('error').classList.add('hidden');
+        document.getElementById('empty').classList.add('hidden');
+        document.getElementById('table-container').classList.add('hidden');
+
+        try {
+            const [casesRes, propsRes, loansRes, partiesRes] = await Promise.all([
+                supabase.from('cases').select('*').order('seq_num'),
+                supabase.from('properties').select('*'),
+                supabase.from('loans').select('*'),
+                supabase.from('parties').select('*'),
+            ]);
+
+            if (casesRes.error) throw casesRes.error;
+
+            allCases = casesRes.data || [];
+
+            // Index by case_id (which is the text version of cases.id)
+            allProperties = {};
+            (propsRes.data || []).forEach(p => { allProperties[p.case_id] = p; });
+
+            allLoans = {};
+            (loansRes.data || []).forEach(l => { allLoans[l.case_id] = l; });
+
+            allParties = {};
+            (partiesRes.data || []).forEach(p => {
+                if (!allParties[p.case_id]) allParties[p.case_id] = [];
+                allParties[p.case_id].push(p);
+            });
+
+            updateStats();
+            applyFilters();
+
+        } catch (err) {
+            console.error('Load error:', err);
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('error-msg').textContent = err.message || 'Failed to connect';
+        }
+    }
+
+    // ========================
+    // STATS
+    // ========================
+    function updateStats() {
+        const foreclosures = allCases.filter(c => c.is_foreclosure === 1).length;
+        const totalBalance = Object.values(allLoans).reduce((sum, l) => sum + (l.principal_balance || 0), 0);
+        const totalArrears = Object.values(allLoans).reduce((sum, l) => sum + (l.estimated_arrears || 0), 0);
+
+        document.getElementById('stats-bar').innerHTML = `
+            <div class="text-center">
+                <div class="text-lg font-semibold text-white">${allCases.length}</div>
+                <div class="text-xs text-dark-400">Cases</div>
+            </div>
+            <div class="text-center">
+                <div class="text-lg font-semibold text-emerald-400">${foreclosures}</div>
+                <div class="text-xs text-dark-400">Foreclosures</div>
+            </div>
+            <div class="text-center">
+                <div class="text-lg font-semibold text-amber-400">$${formatNum(totalBalance)}</div>
+                <div class="text-xs text-dark-400">Total Balance</div>
+            </div>
+            <div class="text-center">
+                <div class="text-lg font-semibold text-red-400">$${formatNum(totalArrears)}</div>
+                <div class="text-xs text-dark-400">Total Arrears</div>
+            </div>
+        `;
+    }
+
+    // ========================
+    // FILTERS & SORT
+    // ========================
+    function applyFilters() {
+        const search = document.getElementById('search').value.toLowerCase();
+        const statusFilter = document.getElementById('filter-status').value;
+        const foreclosureFilter = document.getElementById('filter-foreclosure').value;
+        const loanFilter = document.getElementById('filter-loan').value;
+        const sortBy = document.getElementById('sort-by').value;
+
+        let filtered = allCases.filter(c => {
+            const cid = String(c.id);
+            const parties = allParties[cid] || [];
+            const prop = allProperties[cid];
+
+            // Status filter
+            if (statusFilter && c.status?.toLowerCase() !== statusFilter.toLowerCase()) return false;
+
+            // Foreclosure filter
+            if (foreclosureFilter !== '' && c.is_foreclosure !== parseInt(foreclosureFilter)) return false;
+
+            // Loan filter
+            const hasLoan = !!allLoans[cid];
+            if (loanFilter === 'has' && !hasLoan) return false;
+            if (loanFilter === 'no' && hasLoan) return false;
+
+            // Search
+            if (search) {
+                const searchFields = [
+                    c.case_id, c.note, c.judge, c.status,
+                    ...parties.map(p => p.name),
+                    ...parties.map(p => p.firm),
+                    prop?.address, prop?.city, prop?.zip_code
+                ].filter(Boolean).join(' ').toLowerCase();
+                if (!searchFields.includes(search)) return false;
+            }
+
+            return true;
+        });
+
+        // Sort
+        filtered.sort((a, b) => {
+            if (sortBy === 'seq_num') return a.seq_num - b.seq_num;
+            if (sortBy === 'filed_date') return (a.filed_date || '').localeCompare(b.filed_date || '');
+            if (sortBy === 'principal_balance') {
+                const ba = allLoans[String(a.id)]?.principal_balance || 0;
+                const bb = allLoans[String(b.id)]?.principal_balance || 0;
+                return bb - ba;
+            }
+            if (sortBy === 'estimated_arrears') {
+                const ea = allLoans[String(a.id)]?.estimated_arrears || 0;
+                const eb = allLoans[String(b.id)]?.estimated_arrears || 0;
+                return eb - ea;
+            }
+            return 0;
+        });
+
+        renderTable(filtered);
+    }
+
+    function clearFilters() {
+        document.getElementById('search').value = '';
+        document.getElementById('filter-status').value = '';
+        document.getElementById('filter-foreclosure').value = '';
+        document.getElementById('filter-loan').value = '';
+        document.getElementById('sort-by').value = 'seq_num';
+        applyFilters();
+    }
+
+    // ========================
+    // RENDER TABLE
+    // ========================
+    function renderTable(cases) {
+        document.getElementById('loading').classList.add('hidden');
+
+        if (cases.length === 0) {
+            document.getElementById('empty').classList.remove('hidden');
+            document.getElementById('table-container').classList.add('hidden');
+            return;
+        }
+
+        document.getElementById('empty').classList.add('hidden');
+        document.getElementById('table-container').classList.remove('hidden');
+
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = cases.map(c => {
+            const cid = String(c.id);
+            const loan = allLoans[cid];
+            const prop = allProperties[cid];
+            const parties = allParties[cid] || [];
+            const plaintiff = parties.find(p => p.role === 'plaintiff');
+            const defendant = parties.find(p => p.role === 'defendant');
+
+            const statusClass = c.status?.toLowerCase().includes('open') ? 'status-open'
+                : c.status?.toLowerCase() === 'active' ? 'status-active'
+                : 'status-closed';
+
+            return `
+                <tr class="border-b border-dark-800/50 row-hover transition-colors cursor-pointer" onclick="showDetail(${c.id})">
+                    <td class="px-4 py-3 font-mono text-dark-300">${c.seq_num}</td>
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-white text-xs font-mono">${c.case_id || '—'}</div>
+                        ${c.is_foreclosure ? '<span class="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-500/10 text-amber-400">FORECLOSURE</span>' : ''}
+                    </td>
+                    <td class="px-4 py-3 text-dark-300">${c.filed_date || '—'}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-lg text-xs font-medium ${statusClass}">${c.status || '—'}</span>
+                    </td>
+                    <td class="px-4 py-3 text-dark-200 max-w-[180px] truncate">${plaintiff?.name || '—'}</td>
+                    <td class="px-4 py-3 text-dark-200 max-w-[180px] truncate">${defendant?.name || '—'}</td>
+                    <td class="px-4 py-3 text-dark-300 max-w-[200px] truncate">${prop ? [prop.address, prop.city].filter(Boolean).join(', ') : '—'}</td>
+                    <td class="px-4 py-3 text-right font-mono ${loan?.principal_balance ? 'text-amber-300' : 'text-dark-500'}">${loan?.principal_balance ? '$' + formatNum(loan.principal_balance) : '—'}</td>
+                    <td class="px-4 py-3 text-right font-mono ${loan?.estimated_arrears ? 'text-red-400' : 'text-dark-500'}">${loan?.estimated_arrears ? '$' + formatNum(loan.estimated_arrears) : '—'}</td>
+                    <td class="px-4 py-3 text-center">
+                        <button class="p-1.5 rounded-lg hover:bg-dark-700 transition-colors text-dark-400 hover:text-white">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // ========================
+    // DETAIL MODAL
+    // ========================
+    function showDetail(caseId) {
+        const cid = String(caseId);
+        const c = allCases.find(x => x.id === caseId);
+        if (!c) return;
+
+        const loan = allLoans[cid];
+        const prop = allProperties[cid];
+        const parties = allParties[cid] || [];
+
+        const plaintiffs = parties.filter(p => p.role === 'plaintiff');
+        const defendants = parties.filter(p => p.role === 'defendant');
+        const pAttorneys = parties.filter(p => p.role === 'plaintiff_attorney');
+        const dAttorneys = parties.filter(p => p.role === 'defendant_attorney');
+
+        const statusClass = c.status?.toLowerCase().includes('open') ? 'status-open'
+            : c.status?.toLowerCase() === 'active' ? 'status-active'
+            : 'status-closed';
+
+        let html = `
+            <div class="flex items-start justify-between mb-6">
+                <div>
+                    <h2 class="text-xl font-semibold text-white">Case #${c.seq_num}</h2>
+                    <p class="text-sm text-dark-400 font-mono mt-1">${c.case_id || ''}</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="px-3 py-1 rounded-lg text-xs font-medium ${statusClass}">${c.status || '—'}</span>
+                    ${c.is_foreclosure ? '<span class="px-3 py-1 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400">FORECLOSURE</span>' : ''}
+                    <button onclick="closeModal()" class="p-1.5 rounded-lg hover:bg-dark-700 transition-colors text-dark-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Info grid
+        html += `<div class="grid grid-cols-2 gap-4 mb-6">`;
+        html += infoCard('Filed Date', c.filed_date || '—');
+        html += infoCard('Judge', c.judge || 'Not assigned');
+        html += `</div>`;
+
+        // Note
+        if (c.note) {
+            html += `<div class="glass-light rounded-xl p-4 mb-6"><p class="text-sm text-dark-200">${c.note}</p></div>`;
+        }
+
+        // Property
+        if (prop) {
+            html += `
+                <h3 class="text-sm font-semibold text-dark-300 uppercase tracking-wider mb-3">Property</h3>
+                <div class="glass-light rounded-xl p-4 mb-6">
+                    <p class="text-white">${prop.address || 'Unknown'}</p>
+                    <p class="text-dark-400 text-sm">${[prop.city, prop.state, prop.zip_code].filter(Boolean).join(', ')}</p>
+                    ${prop.legal_description ? `<p class="text-dark-500 text-xs mt-2">${prop.legal_description}</p>` : ''}
+                </div>
+            `;
+        }
+
+        // Loan
+        if (loan) {
+            html += `
+                <h3 class="text-sm font-semibold text-dark-300 uppercase tracking-wider mb-3">Loan Details</h3>
+                <div class="glass-light rounded-xl p-4 mb-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    ${loanField('Original Amount', loan.original_amount ? '$' + formatNum(loan.original_amount) : '—')}
+                    ${loanField('Interest Rate', loan.interest_rate ? loan.interest_rate + '%' : '—')}
+                    ${loanField('Monthly Payment', loan.monthly_payment ? '$' + formatNum(loan.monthly_payment) : '—')}
+                    ${loanField('Principal Balance', loan.principal_balance ? '$' + formatNum(loan.principal_balance) : '—', 'text-amber-300')}
+                    ${loanField('Estimated Arrears', loan.estimated_arrears ? '$' + formatNum(loan.estimated_arrears) : '—', 'text-red-400')}
+                    ${loanField('Months Delinquent', loan.months_delinquent || '—', 'text-red-300')}
+                    ${loanField('Original Lender', loan.original_lender || '—')}
+                    ${loanField('Current Servicer', loan.current_servicer || '—')}
+                    ${loanField('Origination', loan.origination_date || '—')}
+                    ${loanField('Maturity', loan.maturity_date || '—')}
+                    ${loanField('Default Date', loan.default_date || '—', 'text-red-300')}
+                </div>
+            `;
+        }
+
+        // Parties
+        if (parties.length > 0) {
+            html += `<h3 class="text-sm font-semibold text-dark-300 uppercase tracking-wider mb-3">Parties</h3>`;
+            html += `<div class="space-y-3 mb-6">`;
+
+            const groups = [
+                { label: 'Plaintiffs', items: plaintiffs, color: 'blue' },
+                { label: 'Defendants', items: defendants, color: 'orange' },
+                { label: 'Plaintiff Attorneys', items: pAttorneys, color: 'indigo' },
+                { label: 'Defendant Attorneys', items: dAttorneys, color: 'purple' },
+            ];
+
+            groups.forEach(g => {
+                if (g.items.length === 0) return;
+                html += `<div class="glass-light rounded-xl p-4">`;
+                html += `<div class="text-xs font-medium text-${g.color}-400 uppercase tracking-wider mb-2">${g.label}</div>`;
+                g.items.forEach(p => {
+                    html += `<div class="py-1"><span class="text-white">${p.name || '—'}</span>`;
+                    if (p.firm) html += `<span class="text-dark-400 text-sm ml-2">${p.firm}</span>`;
+                    if (p.phone) html += `<span class="text-dark-500 text-sm ml-2">${p.phone}</span>`;
+                    if (p.notes) html += `<div class="text-dark-500 text-xs mt-0.5">${p.notes}</div>`;
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            });
+
+            html += `</div>`;
+        }
+
+        document.getElementById('modal-content').innerHTML = html;
+        document.getElementById('modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        document.getElementById('modal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    // ========================
+    // HELPERS
+    // ========================
+    function formatNum(n) {
+        if (!n && n !== 0) return '—';
+        return Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+
+    function infoCard(label, value) {
+        return `<div class="glass-light rounded-xl p-3"><div class="text-xs text-dark-400 mb-1">${label}</div><div class="text-white font-medium">${value}</div></div>`;
+    }
+
+    function loanField(label, value, colorClass = 'text-white') {
+        return `<div><div class="text-xs text-dark-400">${label}</div><div class="${colorClass} font-medium">${value}</div></div>`;
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeModal();
+        if (e.key === '/' && !e.ctrlKey) {
+            e.preventDefault();
+            document.getElementById('search').focus();
+        }
+    });
+
+    // ========================
+    // INIT
+    // ========================
+    document.addEventListener('DOMContentLoaded', () => {
+        loadData();
+    });
+    </script>
+</body>
+</html>
