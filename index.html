@@ -591,6 +591,7 @@ function applyFilters() {
     });
 
     renderTable(filtered);
+    initResizableColumns();
 }
 
 function clearFilters() {
@@ -881,7 +882,7 @@ document.addEventListener('keydown', e => {
 // ===================
 function initResizableColumns() {
     const table = document.getElementById('cases-table');
-    if (!table) return;
+    if (!table || !table.offsetWidth) return;
     const cols = table.querySelectorAll('colgroup col');
     const ths = table.querySelectorAll('thead th');
 
@@ -936,7 +937,7 @@ function initResizableColumns() {
 // ===================
 // INIT
 // ===================
-document.addEventListener('DOMContentLoaded', () => { loadData(); initResizableColumns(); });
+document.addEventListener('DOMContentLoaded', () => { loadData(); });
 </script>
 </body>
 </html>
