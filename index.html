@@ -883,8 +883,16 @@ function initResizableColumns() {
     const table = document.getElementById('cases-table');
     if (!table) return;
     const cols = table.querySelectorAll('colgroup col');
-    const handles = table.querySelectorAll('.col-resize-handle');
+    const ths = table.querySelectorAll('thead th');
 
+    // Set initial col widths from actual rendered widths
+    ths.forEach((th, i) => {
+        if (cols[i]) cols[i].style.width = th.offsetWidth + 'px';
+    });
+    // Fix total table width so it doesn't reflow
+    table.style.width = table.offsetWidth + 'px';
+
+    const handles = table.querySelectorAll('.col-resize-handle');
     handles.forEach(handle => {
         handle.addEventListener('mousedown', function(e) {
             e.preventDefault();
@@ -892,8 +900,12 @@ function initResizableColumns() {
             const th = handle.parentElement;
             const thIndex = Array.from(th.parentElement.children).indexOf(th);
             const col = cols[thIndex];
+            const nextCol = cols[thIndex + 1];
+            if (!col || !nextCol) return;
+
             const startX = e.pageX;
-            const startWidth = col.offsetWidth || parseInt(col.style.width);
+            const startWidth = parseInt(col.style.width);
+            const nextStartWidth = parseInt(nextCol.style.width);
 
             handle.classList.add('active');
             document.body.classList.add('col-resizing');
@@ -901,7 +913,11 @@ function initResizableColumns() {
             function onMouseMove(ev) {
                 const diff = ev.pageX - startX;
                 const newWidth = Math.max(40, startWidth + diff);
-                col.style.width = newWidth + 'px';
+                const newNextWidth = Math.max(40, nextStartWidth - diff);
+                if (newWidth >= 40 && newNextWidth >= 40) {
+                    col.style.width = newWidth + 'px';
+                    nextCol.style.width = newNextWidth + 'px';
+                }
             }
 
             function onMouseUp() {
